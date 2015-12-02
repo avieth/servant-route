@@ -62,11 +62,26 @@ import Network.Wai
 class HasServer route => HasRoute server route where
     type RoutePrefix server route :: [Symbol]
 
+class ServesRoutes server where
+    type ServesRoutesDatum server :: *
+
 -- | States that a server actually handles a route.
-class HasRoute server route => ImplementsRoute server route where
+class 
+    ( ServesRoutes server
+    , HasRoute server route
+    ) => ImplementsRoute server route
+  where
     type RouteMonad server route :: * -> *
-    serverRoute :: Proxy server -> Proxy route -> ServerT (FullRoute server route) (RouteMonad server route)
-    routeMonadEnter :: Proxy server -> Proxy route -> (RouteMonad server route :~> EitherT ServantErr IO)
+    type RouteMonad server route = EitherT ServantErr IO
+    routeMonadEnter
+        :: Proxy server
+        -> Proxy route
+        -> ServesRoutesDatum server
+        -> (RouteMonad server route :~> EitherT ServantErr IO)
+    serverRoute
+        :: Proxy server
+        -> Proxy route
+        -> ServerT (FullRoute server route) (RouteMonad server route)
 
 type family PrefixRoute (prefix :: [Symbol]) route where
     PrefixRoute '[] route = route
@@ -92,8 +107,16 @@ instance {-# OVERLAPS #-}
 
 -- | Indicates that a server implements all of these routes. This lifts
 --   ImplementsRoute up through the :<|> type.
-class HasRoutes server routes => ImplementsRoutes server routes where
-    serverRoutes :: Proxy server -> Proxy routes -> Server (FullRoutes server routes)
+class
+    ( ServesRoutes server
+    , HasRoutes server routes 
+    ) => ImplementsRoutes server routes
+  where
+    serverRoutes
+        :: Proxy server
+        -> Proxy routes
+        -> ServesRoutesDatum server
+        -> Server (FullRoutes server routes)
 
 instance {-# OVERLAPS #-}
     ( ImplementsRoute server route
@@ -104,11 +127,11 @@ instance {-# OVERLAPS #-}
           (ServerT (FullRoute server route) (EitherT ServantErr IO))
     ) => ImplementsRoutes server (route :<|> routes)
   where
-    serverRoutes proxyServer proxyRoutes = thisServer :<|> thoseServers
+    serverRoutes proxyServer proxyRoutes datum = thisServer :<|> thoseServers
       where
-        thisServer = enter (routeMonadEnter proxyServer (Proxy :: Proxy route))
+        thisServer = enter (routeMonadEnter proxyServer (Proxy :: Proxy route) datum)
                            (serverRoute proxyServer (Proxy :: Proxy route))
-        thoseServers = serverRoutes proxyServer (Proxy :: Proxy routes)
+        thoseServers = serverRoutes proxyServer (Proxy :: Proxy routes) datum
 
 instance {-# OVERLAPS #-}
     ( ImplementsRoute server route
@@ -119,8 +142,8 @@ instance {-# OVERLAPS #-}
           (ServerT (FullRoutes server route) (EitherT ServantErr IO))
     ) => ImplementsRoutes server route
   where
-    serverRoutes proxyServer proxyRoute = enter (routeMonadEnter proxyServer proxyRoute)
-                                                (serverRoute proxyServer proxyRoute)
+    serverRoutes proxyServer proxyRoute datum = enter (routeMonadEnter proxyServer proxyRoute datum)
+                                                      (serverRoute proxyServer proxyRoute)
 
 -- | Obtain a Wai Application for a given server and routes. This will run
 --   on the FullRoutes for that pair, using HasRoute instances to determine
@@ -132,6 +155,7 @@ serveRoutes
        )
     => Proxy server
     -> Proxy routes
+    -> ServesRoutesDatum server
     -> Application
-serveRoutes proxyServer proxyRoutes = serve (Proxy :: Proxy (FullRoutes server routes))
-                                            (serverRoutes proxyServer proxyRoutes)
+serveRoutes proxyServer proxyRoutes datum = serve (Proxy :: Proxy (FullRoutes server routes))
+                                                  (serverRoutes proxyServer proxyRoutes datum)
