@@ -25,6 +25,12 @@ type Junk = T.Text
 type GetJunk = Get '[PlainText] Junk
 
 data TheServer
+
+-- TheServer doesn't require any extra data, like a pool of DB connections,
+-- so we choose () as its datum.
+instance ServesRoutes TheServer where
+    type ServesRoutesDatum TheServer = ()
+
 type TheRoutes = GetStuff :<|> PostStuff :<|> GetJunk
 
 -- The HasRoute instances are designed to be lightweight, so that we can
@@ -46,19 +52,19 @@ instance HasRoute TheServer GetJunk where
 instance ImplementsRoute TheServer GetStuff where
     type RouteMonad TheServer GetStuff = Identity
     serverRoute _ _ = pure (T.pack "Stuff")
-    routeMonadEnter _ _ = Nat (pure . runIdentity)
+    routeMonadEnter _ _ _ = Nat (pure . runIdentity)
 
 instance ImplementsRoute TheServer PostStuff where
     type RouteMonad TheServer PostStuff = IO
     serverRoute _ _ x = print x >> pure ()
-    routeMonadEnter _ _ = Nat liftIO
+    routeMonadEnter _ _ _ = Nat liftIO
 
 instance ImplementsRoute TheServer GetJunk where
     type RouteMonad TheServer GetJunk = IO
     serverRoute _ _ = T.pack <$> getLine
-    routeMonadEnter _ _ = Nat liftIO
+    routeMonadEnter _ _ _ = Nat liftIO
 
 application :: Application
-application = serveRoutes (Proxy :: Proxy TheServer) (Proxy :: Proxy TheRoutes)
+application = serveRoutes (Proxy :: Proxy TheServer) (Proxy :: Proxy TheRoutes) ()
 
 main = run 8082 application
