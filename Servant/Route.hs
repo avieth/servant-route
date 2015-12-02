@@ -26,7 +26,7 @@ import GHC.TypeLits
 import Servant
 import Servant.Server
 import Servant.Server.Internal.Enter
-import Control.Monad.Trans.Either
+import Control.Monad.Trans.Except
 import Network.Wai
 
 -- | States that a server (some type) has a route (some servant route type which
@@ -72,12 +72,12 @@ class
     ) => ImplementsRoute server route
   where
     type RouteMonad server route :: * -> *
-    type RouteMonad server route = EitherT ServantErr IO
+    type RouteMonad server route = ExceptT ServantErr IO
     routeMonadEnter
         :: Proxy server
         -> Proxy route
         -> ServesRoutesDatum server
-        -> (RouteMonad server route :~> EitherT ServantErr IO)
+        -> (RouteMonad server route :~> ExceptT ServantErr IO)
     serverRoute
         :: Proxy server
         -> Proxy route
@@ -123,8 +123,8 @@ instance {-# OVERLAPS #-}
     , ImplementsRoutes server routes
     , Enter
           (ServerT (FullRoute server route) (RouteMonad server route))
-          (RouteMonad server route :~> EitherT ServantErr IO)
-          (ServerT (FullRoute server route) (EitherT ServantErr IO))
+          (RouteMonad server route :~> ExceptT ServantErr IO)
+          (ServerT (FullRoute server route) (ExceptT ServantErr IO))
     ) => ImplementsRoutes server (route :<|> routes)
   where
     serverRoutes proxyServer proxyRoutes datum = thisServer :<|> thoseServers
@@ -138,8 +138,8 @@ instance {-# OVERLAPS #-}
     , FullRoutes server route ~ FullRoute server route
     , Enter
           (ServerT (FullRoutes server route) (RouteMonad server route))
-          (RouteMonad server route :~> EitherT ServantErr IO)
-          (ServerT (FullRoutes server route) (EitherT ServantErr IO))
+          (RouteMonad server route :~> ExceptT ServantErr IO)
+          (ServerT (FullRoutes server route) (ExceptT ServantErr IO))
     ) => ImplementsRoutes server route
   where
     serverRoutes proxyServer proxyRoute datum = enter (routeMonadEnter proxyServer proxyRoute datum)
