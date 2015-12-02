@@ -15,6 +15,9 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 
 type Stuff = T.Text
+-- Notice that we don't include any static parts of the route. This is
+-- good! Where the route is placed on a server is a concern not of the route
+-- itself, but the server and that route taken together.
 type GetStuff = Get '[JSON] Stuff
 type PostStuff = ReqBody '[PlainText] Stuff :> Post '[JSON] ()
 
@@ -25,6 +28,8 @@ data TheServer
 type TheRoutes = GetStuff :<|> PostStuff :<|> GetJunk
 
 instance HasRoute TheServer GetStuff where
+    -- Here we indicate that GetStuff goes under the "stuff" prefix.
+    -- It shall be accessible at GET /stuff/
     type RoutePrefix TheServer GetStuff = '["stuff"]
     serverRoute _ _ = pure (T.pack "Stuff")
     type RouteMonad TheServer GetStuff = Identity
