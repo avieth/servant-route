@@ -29,14 +29,15 @@ import Servant.Server.Internal.Enter
 import Control.Monad.Trans.Either
 import Network.Wai
 
--- | Show that a server (some type) has a route (some servant route type which
+-- | States that a server (some type) has a route (some servant route type which
 --   is not a :<|> alternative, i.e. one particular route).
 --
---   An instance gives a possibly different type for the route, called the
---   FullRoute. This allows a route to be, for example, prefixed with one or
---   more static (non-capture) segments. Thus we can define particular routes
---   without including prefixes which indicate what they're all about, and only
---   throw in those prefixes when we bundle them with other routes.
+--   An instance ultimately determines a possibly different type for the route,
+--   called the FullRoute, via the RoutePrefix, which is a list of symbols.
+--   This allows a route to be prefixed with one or more static (non-capture)
+--   segments. Thus we can define particular routes without including prefixes
+--   which indicate what they're all about, and only throw in those prefixes
+--   when we bundle them with other routes.
 --   Example: CRUD routes for blog posts can be defined like
 --
 --     @
@@ -51,7 +52,6 @@ import Network.Wai
 --
 --     @
 --       RoutePrefix SomeServer GetPost = ["posts"]
---       RoutePrefix SomeServer PutPost = ["posts"]
 --     @
 --
 --   and so on for the other routes.
@@ -59,16 +59,14 @@ import Network.Wai
 --   with a server to use the particular routes in order to obtain the form
 --   of the request, and the particular server which has those routes to
 --   obtain the full url with prefix.
---
---   Other members of this class indicate the monad in which the route is
---   run, complete with a natural transformation allowing us to use it in
---   a servant application.
 class HasServer route => HasRoute server route where
     type RoutePrefix server route :: [Symbol]
+
+-- | States that a server actually handles a route.
+class HasRoute server route => ImplementsRoute server route where
     type RouteMonad server route :: * -> *
     serverRoute :: Proxy server -> Proxy route -> ServerT (FullRoute server route) (RouteMonad server route)
     routeMonadEnter :: Proxy server -> Proxy route -> (RouteMonad server route :~> EitherT ServantErr IO)
-
 
 type family PrefixRoute (prefix :: [Symbol]) route where
     PrefixRoute '[] route = route
@@ -83,17 +81,28 @@ type family FullRoutes server routes where
 
 -- | Indicates that a server has all of these routes. This lifts
 --   HasRoute up through the :<|> type.
-class HasRoutes server routes where
-    serverRoutes :: Proxy server -> Proxy routes -> Server (FullRoutes server routes)
-
+class HasRoutes server routes
 instance {-# OVERLAPS #-}
     ( HasRoute server route
     , HasRoutes server routes
+    ) => HasRoutes server (route :<|> routes)
+instance {-# OVERLAPS #-}
+    ( HasRoute server route
+    ) => HasRoutes server route
+
+-- | Indicates that a server implements all of these routes. This lifts
+--   ImplementsRoute up through the :<|> type.
+class HasRoutes server routes => ImplementsRoutes server routes where
+    serverRoutes :: Proxy server -> Proxy routes -> Server (FullRoutes server routes)
+
+instance {-# OVERLAPS #-}
+    ( ImplementsRoute server route
+    , ImplementsRoutes server routes
     , Enter
           (ServerT (FullRoute server route) (RouteMonad server route))
           (RouteMonad server route :~> EitherT ServantErr IO)
           (ServerT (FullRoute server route) (EitherT ServantErr IO))
-    ) => HasRoutes server (route :<|> routes)
+    ) => ImplementsRoutes server (route :<|> routes)
   where
     serverRoutes proxyServer proxyRoutes = thisServer :<|> thoseServers
       where
@@ -102,13 +111,13 @@ instance {-# OVERLAPS #-}
         thoseServers = serverRoutes proxyServer (Proxy :: Proxy routes)
 
 instance {-# OVERLAPS #-}
-    ( HasRoute server route
+    ( ImplementsRoute server route
     , FullRoutes server route ~ FullRoute server route
     , Enter
           (ServerT (FullRoutes server route) (RouteMonad server route))
           (RouteMonad server route :~> EitherT ServantErr IO)
           (ServerT (FullRoutes server route) (EitherT ServantErr IO))
-    ) => HasRoutes server route
+    ) => ImplementsRoutes server route
   where
     serverRoutes proxyServer proxyRoute = enter (routeMonadEnter proxyServer proxyRoute)
                                                 (serverRoute proxyServer proxyRoute)
@@ -118,7 +127,7 @@ instance {-# OVERLAPS #-}
 --   the appropriate servers and enter transformations for each route.
 serveRoutes
     :: forall server routes .
-       ( HasRoutes server routes
+       ( ImplementsRoutes server routes
        , HasServer (FullRoutes server routes)
        )
     => Proxy server

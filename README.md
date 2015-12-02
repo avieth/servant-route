@@ -20,10 +20,18 @@ With `servant-route`, a server is built following this process:
   1. Define individual routes as parsimoniously as possible.
   2. Define a type to represent your server, probably one with 0 constructors.
   3. Give HasRoute instances for each route of your server, judiciously
-     choosing prefixes.
+     choosing prefixes. These can be imported client-side and server-side.
+  4. Give ImplementsRoute instances for each route of your server. These
+     can be imported server-side (they won't be needed client-side).
 
-And a client for the server obtains the data necessary for requests by
-importing the individual routes, *and* the server type against which it shall
-make requests.
+A client for the server obtains the data necessary for requests by
+importing the individual routes, the server type against which it shall
+make requests, and all of the relevant `HasRoute` instances. Thus the
+intermediary interface between client and server consists of those three
+things:
+
+  - Route types
+  - Server type
+  - `HasRoute` instances
 
 See the [example](./Example.hs).
