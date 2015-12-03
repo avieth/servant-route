@@ -17,28 +17,103 @@ the multi-route server is defined.
 
 With `servant-route`, a server is built following this process:
 
-  1. Define individual routes as parsimoniously as possible.
-  2. Define a type to represent your server, probably one with 0 constructors.
-  3. Give a ServesRoutes instance for your server type, which indicates what
-     extra data the server needs in order to work.
-  4. Give HasRoute instances for each route of your server, judiciously
-     choosing prefixes. These can be imported client-side and server-side.
-  5. Give ImplementsRoute instances for each route of your server. These
-     can be imported server-side (they won't be needed client-side).
+  1. Define new types for each resource, and give instance of `IsResource`
+     which determine the servant route type. It's important to separate the
+     servant route type from the resource type, as two semantically different
+     resources *may* have the very same route type (remember, we're not
+     concerned here with the place of the route in a server, only the essential
+     things like capture variables, query params, request body, etc.).
+  2. Define server type in the usual way, except that resources defined fom
+     step 1 are included by giving `Resource t` where `t` is their unique type
+     (the one which is an instance of `IsResource`.
 
-A client for the server obtains the data necessary for requests by
-importing the individual routes, the server type against which it shall
-make requests, and all of the relevant `HasRoute` instances. Thus the
-intermediary interface between client and server consists of those three
-things:
+Providing an implementation of the server is as usual, except that the
+`Resource` constructors found in the server type must first be eliminated
+via the type family `FlattenRoutes`. This gives a type which has a `ServerT`
+whenever all of the `ResourceRoute` types from `IsResource` instances
+also have `ServerT`. So instead of trying to serve your server type `myServer`,
+you must instead serve `FlattenRoutes myServer`.
 
-  - Route types
-  - Server type
-  - `HasRoute` instances
+Working client-side, a server type (not flattened via `FlattenRoutes`) and a
+resource type are used to come up with a url by running them through `FullRoute`. 
+Whenever the resource is present, the result is the full route of that
+resource on that server, from which a tool like `servant-xhr` can compute
+the required parameters and resource part of a url (the part after the host and
+port).
 
-Whereas the other players are relevant to server-side implementation only:
+## An example
 
-  - `ServesRoutes` instance
-  - `ImplementRoute` instances
+```Haskell
+-- Datatypes used by our API, not directly related to routing.
+data BlogPost
+data Comment
 
-See the [example](./Example.hs).
+-- GetBlogPost identifies a resource. Its ResourceRoute includes only the
+-- information essential to the resource, and is not concerned with any static
+-- route pieces which a server might add for organization purposes.
+data GetBlogPost
+instance IsResource GetBlogPost where
+    type ResourceRoute GetBlogPost = Capture "id" Int :> Get '[JSON] BlogPost
+
+data PostBlogPost
+instance IsResource PostBlogPost where
+    type ResourceRoute PostBlogPost = ReqBody '[JSON] BlogPost :> Post '[JSON] Int
+
+data DeleteBlogPost
+instance IsResource DeleteBlogPost where
+    type ResourceRoute DeleteBlogPost = Capture "id" Int :> Delete '[JSON] BlogPost
+
+data GetComments
+instance IsResource GetComments where
+    type ResourceRoute GetComments = Capture "id" Int :> Get '[JSON] [Comment]
+
+data PostComment
+instance IsResource PostComment where
+    type ResourceRoute PostComment = Capture "id" Int :> ReqBody '[JSON] Comment :> Post '[JSON] Int
+
+-- A server for blog-post-related things only.
+type PostServerV1 =
+         Resource GetBlogPost
+    :<|> Resource PostBlogPost
+
+-- A second version for blog-post-related things, which adds the delete
+-- resource.
+type PostServerV2 =
+         Resource GetBlogPost
+    :<|> Resource PostBlogPost
+    :<|> Resource DeleteBlogPost
+
+-- A server for comment-related things only.
+type CommentServerV1 =
+         Resource GetComments
+    :<|> Resource PostComment
+
+-- Now the entire blog server, version 1. We add organizational prefixes
+-- to distinguish post-related requests from comment-related requests.
+type BlogServerV1 =
+         ("post" :> PostServerV1)
+    :<|> ("comment" :> CommentServerV1)
+
+-- Again for version 2. We'll change the static parts just for fun.
+type BlogServerV2 =
+    "blog" :> (    ("posts" :> PostServerV2)
+              :<|> ("comments" :> CommentServerV1)
+              )
+```
+
+With these definitions, a client can use `GetBlogPost` against both versions
+of the server, each time resolving the appropriate servant route:
+
+```Haskell
+:kind! FullRoute BlogServerV1 GetBlogPost
+= "post" :> (Capture "id" Int :> Get '[JSON] BlogPost)
+
+:kind! FullRoute BlogServerV1 PostComment
+= "comment" :> (Capture "id" Int :> (ReqBody '[JSON] Comment :> Post '[JSON] ()))
+
+:kind! FullRoute BlogServerV2 DeleteBlogPost
+= "blog" :> ("posts" :> (Capture "id" Int :> Delete '[JSON] BlogPost))
+
+:kind! FullRoute BlogServerV1 DeleteBlogPost
+= ResourceNotPresent BlogServerV1 DeleteBlogPost
+```
