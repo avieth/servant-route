@@ -17,15 +17,15 @@ the multi-route server is defined.
 
 With `servant-route`, a server is built following this process:
 
-  1. Define new types for each resource, and give instance of `IsResource`
+  1. Define new types for each resource, and give instances of `IsResource`
      which determine the servant route type. It's important to separate the
      servant route type from the resource type, as two semantically different
      resources *may* have the very same route type (remember, we're not
      concerned here with the place of the route in a server, only the essential
      things like capture variables, query params, request body, etc.).
-  2. Define server type in the usual way, except that resources defined fom
+  2. Define server types in the usual way, except that resources defined fom
      step 1 are included by giving `Resource t` where `t` is their unique type
-     (the one which is an instance of `IsResource`.
+     (the one which is an instance of `IsResource`).
 
 Providing an implementation of the server is as usual, except that the
 `Resource` constructors found in the server type must first be eliminated
@@ -101,8 +101,10 @@ type BlogServerV2 =
               )
 ```
 
-With these definitions, a client can use `GetBlogPost` against both versions
-of the server, each time resolving the appropriate servant route:
+This example is taken even further in [Example.hs](./Example.hs).
+
+With these definitions, we can use `FullRoute` with reference the a particular
+server type:
 
 ```Haskell
 :kind! FullRoute BlogServerV1 GetBlogPost
