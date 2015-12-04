@@ -86,9 +86,24 @@ type BlogServerV2 =
 
 -- Finally, a multi-version blog server, which of course prefixes both
 -- servers with the relevant version.
+--
+-- Note that some resources appear multiple times in this server type!
+-- In fact, every one of them except for DeleteBlogPost appears twice, so
+-- when you try FullRoute BlogServer GetBlogPost, for example, it resolves
+-- the v2 prefix, *only* because v2 comes before v1 in the form of the type.
+-- Reversing the order would favour v1, so all of the routes except for
+-- DeleteBlogPost would resolve to the v1 route.
+--
+-- This should be OK. If a client program imports this server and tries to
+-- resolve one of the resources which appear multiple times, it'll still work,
+-- because those resources have the same type no matter where they appear, i.e.
+-- the input and output is the same regardless of the version. It could be that
+-- they have different server implementations, but that should not matter, since
+-- they implement the very same resource. If there are observable differences,
+-- it's because one of the implementations is doing something silly.
 type BlogServer =
-         ("v1" :> BlogServerV1)
-    :<|> ("v2" :> BlogServerV2)
+         ("v2" :> BlogServerV2)
+    :<|> ("v1" :> BlogServerV1)
 
 -- Here's how we put it all together. It's not so different from typical
 -- servant usage; you just have to remember to FlattenRoutes when giving
@@ -128,7 +143,7 @@ blogServerV2 :: Server (FlattenRoutes BlogServerV2)
 blogServerV2 = postServerV2 :<|> commentServerV1
 
 blogServer :: Server (FlattenRoutes BlogServer)
-blogServer = blogServerV1 :<|> blogServerV2
+blogServer = blogServerV2 :<|> blogServerV1
 
 application :: Application
 application = serve (Proxy :: Proxy (FlattenRoutes BlogServer)) blogServer
