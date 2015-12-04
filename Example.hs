@@ -5,7 +5,10 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
+import GHC.Generics
 import GHC.TypeLits
 import Control.Monad.Trans.Except
 import Data.Aeson
@@ -18,19 +21,17 @@ import Network.Wai.Handler.Warp
 -- An example of use. We have a server which supports two versions of an API,
 -- each of which organizes its resources under route prefixes.
 
--- Some types for use in the routes, with unimplemented JSON instances just so
--- we can use them in a server.
-data BlogPost
-instance ToJSON BlogPost where
-    toJSON = undefined
-instance FromJSON BlogPost where
-    parseJSON = undefined
+-- Some types for use in the resources, just so we can actually demonstrate
+-- a working server.
+data BlogPost = BlogPost Int
+deriving instance Generic BlogPost
+instance ToJSON BlogPost
+instance FromJSON BlogPost
 
-data Comment
-instance ToJSON Comment where
-    toJSON = undefined
-instance FromJSON Comment where
-    parseJSON = undefined
+data Comment = Comment Int
+deriving instance Generic Comment
+instance ToJSON Comment
+instance FromJSON Comment
 
 -- Resource definitions. Notice how they lack organizational static parts.
 -- GetBlogPost, for example, is not given a "posts" prefix, since that's
@@ -113,19 +114,19 @@ type BlogServer =
 -- the Resource constructor.
 --getBlogPostServer :: Server (FlattenRoutes (Resource GetBlogPost))
 getBlogPostServer :: Int -> ExceptT ServantErr IO BlogPost
-getBlogPostServer = undefined
+getBlogPostServer = pure . BlogPost
 
 postBlogPostServer :: BlogPost -> ExceptT ServantErr IO Int
-postBlogPostServer = undefined
+postBlogPostServer (BlogPost i) = pure i
 
 deleteBlogPostServer :: Int -> ExceptT ServantErr IO BlogPost
-deleteBlogPostServer = undefined
+deleteBlogPostServer = pure . BlogPost
 
 getCommentsServer :: Int -> ExceptT ServantErr IO [Comment]
-getCommentsServer = undefined
+getCommentsServer = const (pure [])
 
 postCommentServer :: Int -> Comment -> ExceptT ServantErr IO ()
-postCommentServer = undefined
+postCommentServer = const (const (pure ()))
 
 postServerV1 :: Server (FlattenRoutes PostServerV1)
 postServerV1 = getBlogPostServer :<|> postBlogPostServer
