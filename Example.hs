@@ -110,9 +110,8 @@ type BlogServer =
 -- servant usage; you just have to remember to FlattenRoutes when giving
 -- the types.
 
--- These two types are the same, since FlattenRoutes just dispenses with
--- the Resource constructor.
---getBlogPostServer :: Server (FlattenRoutes (Resource GetBlogPost))
+-- These two types are the same.
+--getBlogPostServer :: Server (Resource GetBlogPost)
 getBlogPostServer :: Int -> ExceptT ServantErr IO BlogPost
 getBlogPostServer = pure . BlogPost
 
@@ -128,25 +127,25 @@ getCommentsServer = const (pure [])
 postCommentServer :: Int -> Comment -> ExceptT ServantErr IO ()
 postCommentServer = const (const (pure ()))
 
-postServerV1 :: Server (FlattenRoutes PostServerV1)
+postServerV1 :: Server PostServerV1
 postServerV1 = getBlogPostServer :<|> postBlogPostServer
 
-postServerV2 :: Server (FlattenRoutes PostServerV2)
+postServerV2 :: Server PostServerV2
 postServerV2 = getBlogPostServer :<|> postBlogPostServer :<|> deleteBlogPostServer
 
-commentServerV1 :: Server (FlattenRoutes CommentServerV1)
+commentServerV1 :: Server CommentServerV1
 commentServerV1 = getCommentsServer :<|> postCommentServer
 
-blogServerV1 :: Server (FlattenRoutes BlogServerV1)
+blogServerV1 :: Server BlogServerV1
 blogServerV1 = postServerV1 :<|> commentServerV1
 
-blogServerV2 :: Server (FlattenRoutes BlogServerV2)
+blogServerV2 :: Server BlogServerV2
 blogServerV2 = postServerV2 :<|> commentServerV1
 
-blogServer :: Server (FlattenRoutes BlogServer)
+blogServer :: Server BlogServer
 blogServer = blogServerV2 :<|> blogServerV1
 
 application :: Application
-application = serve (Proxy :: Proxy (FlattenRoutes BlogServer)) blogServer
+application = serve (Proxy :: Proxy BlogServer) blogServer
 
 main = run 8082 application

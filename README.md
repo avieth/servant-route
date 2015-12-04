@@ -27,12 +27,10 @@ With `servant-route`, a server is built following this process:
      step 1 are included by giving `Resource t` where `t` is their unique type
      (the one which is an instance of `IsResource`).
 
-Providing an implementation of the server is as usual, except that the
-`Resource` constructors found in the server type must first be eliminated
-via the type family `FlattenRoutes`. This gives a type which has a `ServerT`
-whenever all of the `ResourceRoute` types from `IsResource` instances
-also have `ServerT`. So instead of trying to serve your server type `myServer`,
-you must instead serve `FlattenRoutes myServer`.
+Providing an implementation of the server is as usual. The `HasServer` instance
+for `Resource t` eliminates the `Resource` constructor and uses the `HasServer`
+instance for `ResourceRoute t`, so you don't even have to worry about it when
+giving server types and implementations.
 
 Working client-side, a server type (not flattened via `FlattenRoutes`) and a
 resource type are used to come up with a url by running them through `FullRoute`. 

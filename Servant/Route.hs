@@ -41,13 +41,15 @@ module Servant.Route (
     ) where
 
 import GHC.TypeLits
+import Data.Proxy
 import Servant.API
+import Servant.Server
 
 -- | A resource is identified by a type, and determines a servant route type.
 --   The type @t@ must be unique among the resource of each server which uses
 --   it, but @ResrouceRoute t@ need not be, because it's possible that two
 --   distinct resources have the same servant route type.
-class IsResource (t :: *) where
+class IsResource (t :: k) where
     type ResourceRoute t :: *
 
 -- | Indicate a resource. This is to be used in server types, along with
@@ -59,6 +61,10 @@ class IsResource (t :: *) where
 --   them with their @ResourceRoute@, to obtain a valid servant route (something
 --   with a @ServerT@ type defined).
 data Resource t
+
+instance HasServer (ResourceRoute t) => HasServer (Resource t) where
+    type ServerT (Resource t) m = ServerT (ResourceRoute t) m
+    route _ = route (Proxy :: Proxy (ResourceRoute t))
 
 -- | Indicates that a given resource is not present in a routes type.
 data ResourceNotPresent routes resource
